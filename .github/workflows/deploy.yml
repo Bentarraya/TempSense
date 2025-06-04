@@ -46,8 +46,4 @@ steps:
     uses: peaceiris/actions-gh-pages@v3
     with:
       github_token: ${{ secrets.GITHUB_TOKEN }}
-<<<<<<< HEAD
       publish_dir: ./out
-=======
-      publish_dir: ./out
->>>>>>> cdca7511b5b3ba17a77ae5bcfa084eea9fba00aa
