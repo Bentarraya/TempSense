@@ -8,6 +8,7 @@ import { TemperatureCard } from '@/components/dashboard/temperature-card';
 import { HumidityCard } from '@/components/dashboard/humidity-card';
 import { HistoricalSummaryCard } from '@/components/dashboard/historical-summary-card';
 import { ConfigurationModal } from '@/components/dashboard/configuration-modal';
+import { useToast } from "@/hooks/use-toast";
 
 interface HistoricalData {
   tempHigh: number;
@@ -19,41 +20,50 @@ interface HistoricalData {
 export default function TempSenseDashboard() {
   const [temperature, setTemperature] = useState<number | null>(null);
   const [humidity, setHumidity] = useState<number | null>(null);
-  const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null); // Data historis masih placeholder
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate initial data load
-    setTemperature(20 + Math.random() * 5); // Initial temp between 20-25°C
-    setHumidity(40 + Math.random() * 10);   // Initial humidity between 40-50%
+    // Inisialisasi data historis (masih placeholder, bisa dikembangkan lebih lanjut)
     setHistoricalData({
-      tempHigh: 26.5 + Math.random() * 2,
-      tempLow: 18.2 - Math.random() * 2,
-      humidityHigh: 58.0 + Math.random() * 5,
-      humidityLow: 35.5 - Math.random() * 5,
+      tempHigh: 26.5,
+      tempLow: 18.2,
+      humidityHigh: 58.0,
+      humidityLow: 35.5,
     });
 
-    const interval = setInterval(() => {
-      setTemperature(prevTemp => {
-        if (prevTemp === null) return 22.5 + (Math.random() - 0.5) * 2; // Center around 22.5°C
-        const change = (Math.random() - 0.5) * 0.5; // Small change
-        let newTemp = prevTemp + change;
-        if (newTemp < 15) newTemp = 15; // Min temp
-        if (newTemp > 35) newTemp = 35; // Max temp
-        return newTemp;
-      });
-      setHumidity(prevHumidity => {
-        if (prevHumidity === null) return 45 + (Math.random() - 0.5) * 10; // Center around 45%
-        const change = (Math.random() - 0.5) * 2; // Small change
-        let newHumidity = prevHumidity + change;
-        if (newHumidity < 30) newHumidity = 30; // Min humidity
-        if (newHumidity > 70) newHumidity = 70; // Max humidity
-        return newHumidity;
-      });
-    }, 3000); // Update every 3 seconds
+    const fetchSensorData = async () => {
+      try {
+        const response = await fetch('/api/sensor-data');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to fetch sensor data');
+        }
+        const data = await response.json();
+        if (data.temperature !== null && data.humidity !== null) {
+          setTemperature(data.temperature);
+          setHumidity(data.humidity);
+          if (data.timestamp) {
+            setLastUpdated(new Date(data.timestamp));
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching sensor data:", error);
+        toast({
+          variant: "destructive",
+          title: "Error Fetching Data",
+          description: error instanceof Error ? error.message : "Could not connect to the sensor API.",
+        });
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, []);
+    fetchSensorData(); // Panggil sekali saat komponen dimuat
+    const interval = setInterval(fetchSensorData, 5000); // Ambil data setiap 5 detik
+
+    return () => clearInterval(interval); // Bersihkan interval saat komponen di-unmount
+  }, [toast]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -77,12 +87,17 @@ export default function TempSenseDashboard() {
           <HumidityCard humidity={humidity} />
           <HistoricalSummaryCard data={historicalData} />
         </div>
+        {lastUpdated && (
+          <p className="text-xs text-muted-foreground mt-4 text-center">
+            Last updated: {lastUpdated.toLocaleTimeString()}
+          </p>
+        )}
       </main>
 
       <footer className="py-6 md:px-8 md:py-0 border-t">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            Built with Next.js and ShadCN UI. Data is simulated.
+            Built with Next.js and ShadCN UI. {temperature === null ? "Attempting to connect to sensor..." : "Sensor data is live."}
           </p>
         </div>
       </footer>

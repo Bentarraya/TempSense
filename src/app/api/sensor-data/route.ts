@@ -1,6 +1,19 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
+interface SensorData {
+  temperature: number | null;
+  humidity: number | null;
+  timestamp: Date | null;
+}
+
+// Variabel untuk menyimpan data sensor terakhir di memori server
+let latestSensorData: SensorData = {
+  temperature: null,
+  humidity: null,
+  timestamp: null,
+};
+
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
@@ -10,12 +23,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Missing temperature or humidity data' }, { status: 400 });
     }
 
-    // Untuk saat ini, kita hanya akan log data yang diterima
-    // Ke depannya, data ini bisa disimpan ke database
-    console.log(`Received sensor data: Temperature=${temperature}, Humidity=${humidity}`);
+    // Update data sensor terakhir
+    latestSensorData = {
+      temperature: parseFloat(temperature),
+      humidity: parseFloat(humidity),
+      timestamp: new Date(),
+    };
+
+    console.log(`Received sensor data: Temperature=${latestSensorData.temperature}, Humidity=${latestSensorData.humidity}`);
 
     // Kirim respons sukses
-    return NextResponse.json({ message: 'Data received successfully', data }, { status: 200 });
+    return NextResponse.json({ message: 'Data received successfully', data: latestSensorData }, { status: 200 });
   } catch (error) {
     console.error('Error processing sensor data:', error);
     if (error instanceof SyntaxError) {
@@ -25,7 +43,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handler untuk metode HTTP lain jika diperlukan di masa mendatang
 export async function GET() {
-  return NextResponse.json({ message: 'This endpoint only accepts POST requests for sensor data.' }, { status: 405 });
+  if (latestSensorData.temperature === null || latestSensorData.humidity === null) {
+    return NextResponse.json({ message: 'No sensor data available yet.', temperature: null, humidity: null, timestamp: null }, { status: 200 });
+  }
+  return NextResponse.json(latestSensorData, { status: 200 });
 }
