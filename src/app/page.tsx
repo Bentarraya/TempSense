@@ -81,7 +81,7 @@ export default function SmartControlDashboard() {
     const interval = setInterval(fetchAllData, 5000); 
 
     return () => clearInterval(interval);
-  }, [toast, lastUpdated, isLoadingDeviceStatus]); 
+  }, [toast]); // Dependency array changed here
 
   const handleRelayToggle = async (relayId: 'relay1' | 'relay2', newState: 'ON' | 'OFF') => {
     try {
@@ -104,10 +104,6 @@ export default function SmartControlDashboard() {
         description: `${relayId === 'relay1' ? 'Relay 1 (Light)' : 'Relay 2 (Light)'} command to turn ${newState} sent. ESP32 will update shortly.`,
       });
       
-      // Optimistically update local state for desired state if needed,
-      // but actual state will come from fetchDeviceStatus
-      // For now, we rely on the next fetchDeviceStatus to update the actual state
-
     } catch (error) {
       console.error(`Error toggling ${relayId}:`, error);
       toast({
@@ -169,3 +165,4 @@ export default function SmartControlDashboard() {
     </div>
   );
 }
+
