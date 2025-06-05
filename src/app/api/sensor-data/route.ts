@@ -1,41 +1,53 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
-interface SensorData {
+interface DeviceStatus {
   temperature: number | null;
   humidity: number | null;
+  relay1ActualState: 'ON' | 'OFF' | null;
+  relay2ActualState: 'ON' | 'OFF' | null;
   timestamp: Date | null;
 }
 
-// Variabel untuk menyimpan data sensor terakhir di memori server
-let latestSensorData: SensorData = {
+let latestDeviceStatus: DeviceStatus = {
   temperature: null,
   humidity: null,
+  relay1ActualState: null,
+  relay2ActualState: null,
   timestamp: null,
 };
 
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
-    const { temperature, humidity } = data;
+    const { temperature, humidity, relay1ActualState, relay2ActualState } = data;
 
-    if (temperature === undefined || humidity === undefined) {
-      return NextResponse.json({ message: 'Missing temperature or humidity data' }, { status: 400 });
+    if (temperature === undefined || humidity === undefined || relay1ActualState === undefined || relay2ActualState === undefined) {
+      return NextResponse.json({ message: 'Missing temperature, humidity, or relay state data' }, { status: 400 });
+    }
+    
+    const isValidRelayState = (state: any) => state === 'ON' || state === 'OFF' || state === null;
+
+    if (!isValidRelayState(relay1ActualState) || !isValidRelayState(relay2ActualState)) {
+        if ((relay1ActualState !== null && (relay1ActualState !== 'ON' && relay1ActualState !== 'OFF')) ||
+            (relay2ActualState !== null && (relay2ActualState !== 'ON' && relay2ActualState !== 'OFF'))) {
+            return NextResponse.json({ message: 'Invalid relay state values. Must be ON or OFF if not null.' }, { status: 400 });
+        }
     }
 
-    // Update data sensor terakhir
-    latestSensorData = {
+    latestDeviceStatus = {
       temperature: parseFloat(temperature),
       humidity: parseFloat(humidity),
+      relay1ActualState: relay1ActualState,
+      relay2ActualState: relay2ActualState,
       timestamp: new Date(),
     };
 
-    console.log(`Received sensor data: Temperature=${latestSensorData.temperature}, Humidity=${latestSensorData.humidity}`);
+    console.log(`Received device status: Temp=${latestDeviceStatus.temperature}, Hum=${latestDeviceStatus.humidity}, R1=${latestDeviceStatus.relay1ActualState}, R2=${latestDeviceStatus.relay2ActualState}`);
 
-    // Kirim respons sukses
-    return NextResponse.json({ message: 'Data received successfully', data: latestSensorData }, { status: 200 });
+    return NextResponse.json({ message: 'Data received successfully', data: latestDeviceStatus }, { status: 200 });
   } catch (error) {
-    console.error('Error processing sensor data:', error);
+    console.error('Error processing device status:', error);
     if (error instanceof SyntaxError) {
       return NextResponse.json({ message: 'Invalid JSON payload' }, { status: 400 });
     }
@@ -44,8 +56,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  if (latestSensorData.temperature === null || latestSensorData.humidity === null) {
-    return NextResponse.json({ message: 'No sensor data available yet.', temperature: null, humidity: null, timestamp: null }, { status: 200 });
+  if (latestDeviceStatus.timestamp === null) {
+    return NextResponse.json({
+        message: 'No device data available yet.',
+        temperature: null,
+        humidity: null,
+        relay1ActualState: null,
+        relay2ActualState: null,
+        timestamp: null
+    }, { status: 200 });
   }
-  return NextResponse.json(latestSensorData, { status: 200 });
+  return NextResponse.json(latestDeviceStatus, { status: 200 });
 }

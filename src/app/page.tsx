@@ -2,68 +2,103 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Settings, ThermometerIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Cpu } from 'lucide-react';
 import { TemperatureCard } from '@/components/dashboard/temperature-card';
 import { HumidityCard } from '@/components/dashboard/humidity-card';
-import { HistoricalSummaryCard } from '@/components/dashboard/historical-summary-card';
-import { ConfigurationModal } from '@/components/dashboard/configuration-modal';
+import { RelayControlCard } from '@/components/dashboard/relay-control-card';
 import { useToast } from "@/hooks/use-toast";
 
-interface HistoricalData {
-  tempHigh: number;
-  tempLow: number;
-  humidityHigh: number;
-  humidityLow: number;
-}
 
-export default function TempSenseDashboard() {
+type RelayState = 'ON' | 'OFF' | null;
+
+export default function SmartControlDashboard() {
   const [temperature, setTemperature] = useState<number | null>(null);
   const [humidity, setHumidity] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null); // Data historis masih placeholder
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  
+  const [relay1ActualState, setRelay1ActualState] = useState<RelayState>(null);
+  const [relay2ActualState, setRelay2ActualState] = useState<RelayState>(null);
+  const [isLoadingDeviceStatus, setIsLoadingDeviceStatus] = useState(true);
+
   const { toast } = useToast();
 
   useEffect(() => {
-    // Inisialisasi data historis (masih placeholder, bisa dikembangkan lebih lanjut)
-    setHistoricalData({
-      tempHigh: 26.5,
-      tempLow: 18.2,
-      humidityHigh: 58.0,
-      humidityLow: 35.5,
-    });
-
-    const fetchSensorData = async () => {
+    const fetchDeviceStatus = async () => {
+      setIsLoadingDeviceStatus(true);
       try {
         const response = await fetch('/api/sensor-data');
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch sensor data');
+          throw new Error(errorData.message || 'Failed to fetch device status');
         }
         const data = await response.json();
-        if (data.temperature !== null && data.humidity !== null) {
+        if (data.timestamp) {
           setTemperature(data.temperature);
           setHumidity(data.humidity);
-          if (data.timestamp) {
-            setLastUpdated(new Date(data.timestamp));
-          }
+          setRelay1ActualState(data.relay1ActualState);
+          setRelay2ActualState(data.relay2ActualState);
+          setLastUpdated(new Date(data.timestamp));
+        } else {
+           setRelay1ActualState(data.relay1ActualState); 
+           setRelay2ActualState(data.relay2ActualState);
+           if (data.temperature !== undefined) setTemperature(data.temperature);
+           if (data.humidity !== undefined) setHumidity(data.humidity);
         }
       } catch (error) {
-        console.error("Error fetching sensor data:", error);
-        toast({
-          variant: "destructive",
-          title: "Error Fetching Data",
-          description: error instanceof Error ? error.message : "Could not connect to the sensor API.",
-        });
+        console.error("Error fetching device status:", error);
+        if (!lastUpdated) { 
+            toast({
+            variant: "destructive",
+            title: "Error Fetching Device Status",
+            description: error instanceof Error ? error.message : "Could not connect to the device API.",
+            });
+        }
+      } finally {
+        setIsLoadingDeviceStatus(false);
       }
     };
+    
+    const fetchAllData = () => {
+        fetchDeviceStatus();
+    };
 
-    fetchSensorData(); // Panggil sekali saat komponen dimuat
-    const interval = setInterval(fetchSensorData, 5000); // Ambil data setiap 5 detik
+    fetchAllData(); 
+    const interval = setInterval(fetchAllData, 5000); 
 
-    return () => clearInterval(interval); // Bersihkan interval saat komponen di-unmount
-  }, [toast]);
+    return () => clearInterval(interval);
+  }, [toast, lastUpdated]); 
+
+  const handleRelayToggle = async (relayId: 'relay1' | 'relay2', newState: 'ON' | 'OFF') => {
+    try {
+      const response = await fetch('/api/relay-command', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ relayId, command: newState }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to send relay command');
+      }
+
+      toast({
+        title: "Command Sent",
+        description: `${relayId === 'relay1' ? 'Relay 1 (Light)' : 'Relay 2 (Light)'} command to turn ${newState} sent. ESP32 will update shortly.`,
+      });
+      
+    } catch (error) {
+      console.error(`Error toggling ${relayId}:`, error);
+      toast({
+        variant: "destructive",
+        title: `Error Sending ${relayId === 'relay1' ? 'Relay 1' : 'Relay 2'} Command`,
+        description: error instanceof Error ? error.message : "Could not send command.",
+      });
+    }
+  };
+
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -71,13 +106,10 @@ export default function TempSenseDashboard() {
         <div className="container flex h-16 items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-md bg-primary text-primary-foreground">
-              <ThermometerIcon size={24} />
+              <Cpu size={24} />
             </div>
-            <h1 className="text-2xl font-bold font-headline">TempSense</h1>
+            <h1 className="text-2xl font-bold font-headline">SmartControl</h1>
           </div>
-          <Button variant="outline" size="icon" onClick={() => setIsConfigModalOpen(true)} aria-label="Settings">
-            <Settings className="h-5 w-5" />
-          </Button>
         </div>
       </header>
 
@@ -85,24 +117,37 @@ export default function TempSenseDashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <TemperatureCard temperature={temperature} />
           <HumidityCard humidity={humidity} />
-          <HistoricalSummaryCard data={historicalData} />
+          
+          <RelayControlCard
+            relay1Status={relay1ActualState}
+            onRelay1Toggle={(newState) => handleRelayToggle('relay1', newState)}
+            relay2Status={relay2ActualState}
+            onRelay2Toggle={(newState) => handleRelayToggle('relay2', newState)}
+            isLoading={isLoadingDeviceStatus}
+            isInitiallyConnecting={!lastUpdated && isLoadingDeviceStatus}
+            className="md:col-span-2 lg:col-span-3" 
+          />
         </div>
+        
         {lastUpdated && (
           <p className="text-xs text-muted-foreground mt-4 text-center">
-            Last updated: {lastUpdated.toLocaleTimeString()}
+            Device status last updated: {lastUpdated.toLocaleTimeString()}
           </p>
+        )}
+         {isLoadingDeviceStatus && !lastUpdated && (
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+                Connecting to device...
+            </p>
         )}
       </main>
 
       <footer className="py-6 md:px-8 md:py-0 border-t">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            Built with Next.js and ShadCN UI. {temperature === null ? "Attempting to connect to sensor..." : "Sensor data is live."}
+            Built with Next.js and ShadCN UI. {temperature === null && humidity === null && relay1ActualState === null && relay2ActualState === null && !lastUpdated ? "Attempting to connect to device..." : "Device data is live."}
           </p>
         </div>
       </footer>
-      
-      <ConfigurationModal isOpen={isConfigModalOpen} onOpenChange={setIsConfigModalOpen} />
     </div>
   );
 }

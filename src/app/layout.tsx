@@ -1,10 +1,11 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'TempSense - Monitor Your Environment',
-  description: 'Real-time temperature and humidity monitoring with ESP32 and DHT11 sensor.',
+  title: 'SmartControl - Monitor & Control Your Environment',
+  description: 'Real-time environment monitoring and relay control with ESP32.',
 };
 
 export default function RootLayout({
