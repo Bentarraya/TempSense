@@ -11,6 +11,14 @@ import { useToast } from "@/hooks/use-toast";
 
 type RelayState = 'ON' | 'OFF' | null;
 
+interface DeviceStatus {
+  temperature: number | null;
+  humidity: number | null;
+  relay1ActualState: RelayState;
+  relay2ActualState: RelayState;
+  timestamp: string | null; 
+}
+
 export default function SmartControlDashboard() {
   const [temperature, setTemperature] = useState<number | null>(null);
   const [humidity, setHumidity] = useState<number | null>(null);
@@ -31,7 +39,7 @@ export default function SmartControlDashboard() {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to fetch device status');
         }
-        const data = await response.json();
+        const data: DeviceStatus = await response.json();
         if (data.timestamp) {
           setTemperature(data.temperature);
           setHumidity(data.humidity);
@@ -46,11 +54,18 @@ export default function SmartControlDashboard() {
         }
       } catch (error) {
         console.error("Error fetching device status:", error);
-        if (!lastUpdated) { 
+        // Only show toast if it's not the initial load or if there was a previous successful load
+        if (lastUpdated) { 
             toast({
             variant: "destructive",
             title: "Error Fetching Device Status",
             description: error instanceof Error ? error.message : "Could not connect to the device API.",
+            });
+        } else if (!lastUpdated && !isLoadingDeviceStatus) { // If initial load fails after trying
+           toast({
+            variant: "destructive",
+            title: "Error Connecting to Device",
+            description: "Could not fetch initial device status. Please check ESP32 connection.",
             });
         }
       } finally {
@@ -66,7 +81,7 @@ export default function SmartControlDashboard() {
     const interval = setInterval(fetchAllData, 5000); 
 
     return () => clearInterval(interval);
-  }, [toast, lastUpdated]); 
+  }, [toast, lastUpdated, isLoadingDeviceStatus]); 
 
   const handleRelayToggle = async (relayId: 'relay1' | 'relay2', newState: 'ON' | 'OFF') => {
     try {
@@ -89,6 +104,10 @@ export default function SmartControlDashboard() {
         description: `${relayId === 'relay1' ? 'Relay 1 (Light)' : 'Relay 2 (Light)'} command to turn ${newState} sent. ESP32 will update shortly.`,
       });
       
+      // Optimistically update local state for desired state if needed,
+      // but actual state will come from fetchDeviceStatus
+      // For now, we rely on the next fetchDeviceStatus to update the actual state
+
     } catch (error) {
       console.error(`Error toggling ${relayId}:`, error);
       toast({
@@ -101,7 +120,7 @@ export default function SmartControlDashboard() {
 
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4 md:px-8">
           <div className="flex items-center gap-2">
@@ -125,7 +144,6 @@ export default function SmartControlDashboard() {
             onRelay2Toggle={(newState) => handleRelayToggle('relay2', newState)}
             isLoading={isLoadingDeviceStatus}
             isInitiallyConnecting={!lastUpdated && isLoadingDeviceStatus}
-            className="md:col-span-2 lg:col-span-3" 
           />
         </div>
         
@@ -144,7 +162,7 @@ export default function SmartControlDashboard() {
       <footer className="py-6 md:px-8 md:py-0 border-t">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            Built with Next.js and ShadCN UI. {temperature === null && humidity === null && relay1ActualState === null && relay2ActualState === null && !lastUpdated ? "Attempting to connect to device..." : "Device data is live."}
+            Built with Next.js and ShadCN UI. {temperature === null && humidity === null && relay1ActualState === null && relay2ActualState === null && !lastUpdated && isLoadingDeviceStatus ? "Attempting to connect to device..." : "Device data is live."}
           </p>
         </div>
       </footer>
