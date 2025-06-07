@@ -54,14 +54,13 @@ export default function SmartControlDashboard() {
         }
       } catch (error) {
         console.error("Error fetching device status:", error);
-        // Only show toast if it's not the initial load or if there was a previous successful load
-        if (lastUpdated) { 
+        if (lastUpdated || !isLoadingDeviceStatus) { 
             toast({
             variant: "destructive",
             title: "Error Fetching Device Status",
             description: error instanceof Error ? error.message : "Could not connect to the device API.",
             });
-        } else if (!lastUpdated && !isLoadingDeviceStatus) { // If initial load fails after trying
+        } else if (!lastUpdated && !isLoadingDeviceStatus) {
            toast({
             variant: "destructive",
             title: "Error Connecting to Device",
@@ -78,12 +77,19 @@ export default function SmartControlDashboard() {
     };
 
     fetchAllData(); 
-    const interval = setInterval(fetchAllData, 5000); 
+    const interval = setInterval(fetchAllData, 2500); // Reduced polling interval to 2.5 seconds
 
     return () => clearInterval(interval);
-  }, [toast]); // Dependency array changed here
+  }, [toast]); 
 
   const handleRelayToggle = async (relayId: 'relay1' | 'relay2', newState: 'ON' | 'OFF') => {
+    // Optimistically update UI
+    if (relayId === 'relay1') {
+      setRelay1ActualState(newState);
+    } else if (relayId === 'relay2') {
+      setRelay2ActualState(newState);
+    }
+
     try {
       const response = await fetch('/api/relay-command', {
         method: 'POST',
@@ -96,6 +102,8 @@ export default function SmartControlDashboard() {
       const result = await response.json();
 
       if (!response.ok) {
+        // If the command fails, the UI will be in an optimistic state.
+        // The next poll from fetchDeviceStatus will correct it to the actual device state.
         throw new Error(result.message || 'Failed to send relay command');
       }
 
@@ -111,6 +119,8 @@ export default function SmartControlDashboard() {
         title: `Error Sending ${relayId === 'relay1' ? 'Relay 1' : 'Relay 2'} Command`,
         description: error instanceof Error ? error.message : "Could not send command.",
       });
+      // Consider reverting optimistic update here if strict consistency is needed immediately on error,
+      // or let the next poll correct it. For simplicity, letting the poll correct.
     }
   };
 
